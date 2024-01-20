@@ -4,6 +4,7 @@ const path = require('path')
 
 const app = express();
 const PORT = 8000;
+const IP = '127.0.0.1';
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -16,7 +17,7 @@ app.post('/download', (req, res) => {
         if(!err && data) {
             res.send({ [pos] : JSON.parse(String(data)) });
         } else {
-            res.send(JSON.stringify(String(err.errno)));
+            res.send({ 'ERROR' : err});
         }
     })
 })
@@ -27,10 +28,10 @@ app.post('/upload', (req, res) => {
             if(!err) {
                 res.send(err);
             } else {
-                res.send("Sigma");
+                res.send({ 'ERROR' : err});
             }
         })
     }
 })
 
-app.listen(PORT, '127.0.0.1');
+app.listen(PORT, IP);

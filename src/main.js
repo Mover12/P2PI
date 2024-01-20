@@ -1,6 +1,6 @@
-import Vector from './field/Vector.js'
-import Chunk from './field/Chunk.js'
-import field from './field/consts.js'
+import Vector from './class/Vector.js'
+import Chunk from './class/Chunk.js'
+
 
 var cnv = document.getElementById("cnv");
 var cnv2d = cnv.getContext("2d");
@@ -8,35 +8,45 @@ var cnv2d = cnv.getContext("2d");
 var chunks = new Map();
 var chunksQueue = new Array();
 
-var curCameraX = 0;
-var curCameraY = 0;
-var cameraX = 0;
-var cameraY = 0;
+var camera = new Vector(0, 0);
+var prevCamera = new Vector(0, 0);
+var scale = new Vector(1, 1);
 
-function generateChunk (pos) {
+const cellCount = 64;
+const cellPSize = 10;
+const chunkPSize = cellCount * cellPSize;
+
+const renderDistance = 1;
+const chunksCashSize= 128;
+
+const zoomSpeed = 0.1;
+const zoomMaximum = 10;
+
+
+function generateChunk(pos) {
     var chunk = chunks.get(pos.stringify());
     
     if (chunk == null) {
-        chunk = deserializeChunk(pos.stringify());
+        chunk = downloadChunk(pos.stringify());
         chunksQueue.push(pos);
         chunks.set(pos.stringify(), chunk);
-        if (chunksQueue.length > field.CHUNKSCASHSIZE) {
+        if (chunksQueue.length > chunksCashSize) {
             let pos = chunksQueue.shift();
-            serializeChunk(pos, chunks.get(pos.stringify()));
+            uploadChunk(pos, chunks.get(pos.stringify()));
             chunks.delete(pos.stringify());
       }
     }
 }
-  
+
 function generateNearChunks(pos) {
-    for (let i = pos.y - field.RENDERDISTANCE; i <= pos.y + field.RENDERDISTANCE; i++) {
-      for (let j = pos.x - field.RENDERDISTANCE; j <= pos.x + field.RENDERDISTANCE; j++) {
+    for (let i = pos.y - renderDistance; i <= pos.y + renderDistance; i++) {
+      for (let j = pos.x - renderDistance; j <= pos.x + renderDistance; j++) {
         generateChunk(new Vector(j, i));
       }
     }
   }
-  
-function serializeChunk (pos, chunk) {
+
+function uploadChunk(pos, chunk) {
     fetch("/upload", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,8 +54,8 @@ function serializeChunk (pos, chunk) {
     });
 }
   
-function deserializeChunk (pos) {
-    var chunk = new Chunk();
+function downloadChunk(pos) {
+    var chunk = new Chunk(cellCount);
     fetch("/download", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,7 +63,7 @@ function deserializeChunk (pos) {
     }).then(function(res) {
         return res.json()
     }).then(function(data) {
-        if (data != "-4058") {
+        if (Object.keys(data)[0] != 'ERROR') {
             chunk.cellCount = data[Object.keys(data)]['cellCount']
             chunk.cells = data[Object.keys(data)]['cells']
         }
@@ -61,11 +71,10 @@ function deserializeChunk (pos) {
     return chunk;
 }
   
-function renderChunks (chunksQueue) {
-    chunksQueue.forEach(elem => {
-        var chunkPos = elem;
-        for (let i = 0; i < field.CELLCOUNT; i++) {
-            for (let j = 0; j < field.CELLCOUNT; j++) {
+function renderChunks(chunksQueue) {
+    chunksQueue.forEach(chunkPos => {
+        for (let i = 0; i < cellCount; i++) {
+            for (let j = 0; j < cellCount; j++) {
                 var cell = chunks.get(chunkPos.stringify()).cells[i][j];
                 var cellColor = '#000000';
                 if (cell == 0) {
@@ -74,62 +83,38 @@ function renderChunks (chunksQueue) {
                 else if (cell == 1) {
                     cellColor = '#FF4040';
                 }
-                var cellX = j * field.CELLPSIZE + chunkPos.x * field.CHUNKPSIZE + cnv.width / 2  - cameraX;
-                var cellY = i * field.CELLPSIZE + chunkPos.y * field.CHUNKPSIZE + cnv.height / 2 - cameraY;
-                if ((-field.CELLPSIZE <= cellX && cellX <= cnv.width) && (-field.CELLPSIZE <= cellY && cellY <= cnv.height)) {
+                var cellPos = convertC2Mo(new Vector(
+                    j * cellPSize + chunkPos.x * chunkPSize, 
+                    i * cellPSize + chunkPos.y * chunkPSize
+                ));
+                if ((-cellPSize * scale.x <= cellPos.x && cellPos.x <= cnv2d.canvas.width) && (-cellPSize * scale.y <= cellPos.y && cellPos.y <= cnv2d.canvas.height)) {
                     cnv2d.fillStyle = cellColor;
-                    cnv2d.fillRect(cellX, cellY, field.CELLPSIZE, field.CELLPSIZE);
+                    cnv2d.fillRect(cellPos.x, cellPos.y, cellPSize * scale.x, cellPSize * scale.y);
                 }
             }
         }
     });
 }
-  
-function convertM2Ch (pos) {
-    var chunkX = Math.floor(pos.x / field.CHUNKPSIZE);
-    var chunkY = Math.floor(pos.y / field.CHUNKPSIZE);
-    return new Vector(chunkX, chunkY);
-}
-  
-function convertM2Ce (pos) {
-    var cellX = Math.floor((pos.x - convertM2Ch(pos).x * field.CHUNKPSIZE) / field.CELLPSIZE);
-    var cellY = Math.floor((pos.y - convertM2Ch(pos).y * field.CHUNKPSIZE) / field.CELLPSIZE);
-    return new Vector(cellX, cellY);
-}
 
-document.addEventListener('mousedown', mousedown)
-document.addEventListener('mouseup', mouseup)
-document.addEventListener('keydown', save)
-
-function save(event) {
-    if (event.code == 'KeyS') {
-        chunks.keys().forEach((chunkPos) => {
-            serializeChunk(chunkPos, chunks.get(chunkPos));
-        })
-    }
-}
-
-function mousedown(event) {
+function mousePress(event) {
     if (event.buttons == 4) {
-        curCameraX = event.offsetX;
-        curCameraY = event.offsetY;
+        prevCamera.set(event.offsetX, event.offsetY);
     }
-    document.addEventListener('mousemove', mousemove)
+    document.addEventListener('mousemove', mouseMove)
 }
 
-function mouseup() {
-    document.removeEventListener('mousemove', mousemove);
+function mouseRelease() {
+    document.removeEventListener('mousemove', mouseMove);
 }
 
-function mousemove(event) {
+function mouseMove(event) {
     if (event.buttons == 4) {
-        cameraX = cameraX - (event.offsetX - curCameraX);
-        cameraY = cameraY - (event.offsetY - curCameraY);
-        curCameraX = event.offsetX;
-        curCameraY = event.offsetY;
+        camera.x = camera.x - (event.offsetX - prevCamera.x) / scale.x;
+        camera.y = camera.y - (event.offsetY - prevCamera.y) / scale.y;
+        prevCamera.set(event.offsetX, event.offsetY);
     } else {
-        var chunkPos = convertM2Ch(new Vector(cameraX + event.offsetX - cnv.width / 2, cameraY + event.offsetY - cnv.height / 2));
-        var cellPos = convertM2Ce(new Vector(cameraX + event.offsetX - cnv.width / 2, cameraY + event.offsetY - cnv.height / 2));
+        var chunkPos = convertM2Ch(convertM2Ca(new Vector(event.offsetX, event.offsetY)));
+        var cellPos = convertM2Ce(convertM2Ca(new Vector(event.offsetX, event.offsetY)));
         const chunk = chunks.get(chunkPos.stringify());
         if (chunk != null) {
             if (event.buttons == 1) {
@@ -142,9 +127,64 @@ function mousemove(event) {
     }
 }
 
+function keyPress(event) {
+    console.log(event);
+    if (event.code == 'KeyS') {
+        chunks.keys().forEach((chunkPos) => {
+            uploadChunk(chunkPos, chunks.get(chunkPos));
+        })
+    }
+}
+
+function wheel(event) {
+    var cameraBefore = convertM2Ca(new Vector(event.offsetX, event.offsetY));
+    if (event.deltaY < 0) {
+        if (Math.floor(scale.x) < zoomMaximum && Math.floor(scale.y) < zoomMaximum) {
+            scale = scale.add(new Vector(zoomSpeed, zoomSpeed));
+        }
+    } else {
+        if (Math.floor(scale.x) > zoomSpeed && Math.floor(scale.y) > zoomSpeed) {
+            scale = scale.sub(new Vector(zoomSpeed, zoomSpeed));
+        }
+    }
+    var cameraAfter = convertM2Ca(new Vector(event.offsetX, event.offsetY));
+    camera = camera.add(cameraBefore.sub(cameraAfter));
+}
+
+
+function convertC2Mo(pos) {
+    return pos.sub(camera).mult(scale);
+}
+
+function convertM2Ca(pos) {
+    var cameraX = camera.x + pos.x / scale.x;
+    var cameraY = camera.y + pos.y / scale.y;
+    return new Vector(cameraX, cameraY);
+}
+
+function convertM2Ch(pos) {
+    var chunkX = Math.floor(pos.x / (chunkPSize));
+    var chunkY = Math.floor(pos.y / (chunkPSize));
+    return new Vector(chunkX, chunkY);
+}
+
+function convertM2Ce(pos) {
+    var cellX = Math.floor((pos.x - convertM2Ch(pos).x * chunkPSize) / (cellPSize));
+    var cellY = Math.floor((pos.y - convertM2Ch(pos).y * chunkPSize) / (cellPSize));
+    return new Vector(cellX, cellY);
+}
+
+
 setInterval(() => {
     cnv2d.fillStyle = "black"
     cnv2d.fillRect(0, 0, cnv2d.canvas.width, cnv2d.canvas.height)
-    generateNearChunks(convertM2Ch(new Vector(cameraX, cameraY)));
+    generateNearChunks(convertM2Ch(new Vector(camera.x + cnv2d.canvas.width / 2, camera.y + cnv2d.canvas.height / 2)));
     renderChunks(chunksQueue);
 }, 1);
+
+
+cnv.addEventListener('mousedown', mousePress);
+cnv.addEventListener('mouseup', mouseRelease);
+cnv.addEventListener('wheel', wheel);
+
+document.addEventListener('keydown', keyPress);
