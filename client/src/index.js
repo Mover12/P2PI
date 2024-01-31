@@ -1,3 +1,5 @@
+import './css/style.css'
+
 import Vector from './class/Vector.js'
 import Chunk from './class/Chunk.js'
 import Converter from './class/Converter.js'

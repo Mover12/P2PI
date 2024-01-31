@@ -1,14 +1,11 @@
-const express = require('express');
 const ws = require('ws');
 const path = require('path');
 const uuid = require('uuid');
 
 
-const PORT = 8000;
 const WSPORT = 5000;
 const IP = 'localhost';
 
-const app = express();
 const wss = new ws.Server({
     port: WSPORT,
     url: IP
@@ -17,13 +14,6 @@ const wss = new ws.Server({
 var clients = {};
 var hosts = {};
 var positions = {};
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-app.use('/', express.static(path.resolve('public')));
-app.use('/src', express.static(path.resolve('src')));
-
 
 wss.on('connection', ws => {
     ws.id = uuid.v4();
@@ -76,5 +66,3 @@ wss.on('connection', ws => {
         }
     })
 });
-
-app.listen(PORT, IP);
