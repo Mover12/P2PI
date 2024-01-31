@@ -4,7 +4,7 @@ import Vector from './class/Vector.js'
 import Chunk from './class/Chunk.js'
 import Converter from './class/Converter.js'
 
-const socket = new WebSocket('ws://ehom.ddns.net:5000');
+const socket = new WebSocket('wss://localhost:5000');
 var cnv = document.querySelector(".canvas");
 var position = document.querySelector(".position");
 var cnv2d = cnv.getContext("2d");
