@@ -1,6 +1,6 @@
 {
-  "homepage": "https://mover12.github.io/P2PI",
-  "name": "karkason",
+  "homepage": "https://mover12.github.io/p2pi",
+  "name": "p2pi",
   "version": "1.0.0",
   "description": "",
   "main": "./src/index.js",

@@ -3,7 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = (env) => {
     return {
-        mode: 'development',
+        mode: 'production',
         entry: {
             client: path.resolve(__dirname, 'client', 'src', 'index.js')
         },
