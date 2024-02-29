@@ -1,68 +1,18 @@
-const ws = require('ws');
-const path = require('path');
+const SignalSocket = require('./class/SignalSocket');
+const WebSocket = require('ws');
+
 const uuid = require('uuid');
 
+const PORT = 8000;
+const URL = '127.0.0.1';
 
-const WSPORT = 5000;
-const IP = 'localhost';
+const socket = new WebSocket.Server({
+    port: PORT,
+    url: URL
+})
 
-const wss = new ws.Server({
-    port: WSPORT,
-    url: IP
-});
+const ss = new SignalSocket({ ws: socket });
 
-var clients = {};
-var hosts = {};
-var positions = {};
-
-wss.on('connection', ws => {
-    ws.id = uuid.v4();
-    clients[ws.id] = ws;
-    positions[ws.id] = [];
-    ws.on('close', () => {
-        positions[ws.id].forEach(pos => {
-            hosts[pos].splice(hosts[pos].indexOf(ws.id), 1);
-            if (hosts[pos].length == 0) {
-                delete hosts[pos]
-            }
-        });
-        delete positions[ws.id];
-        delete clients[ws.id]
-    });
-    ws.on('message', message => {
-        var data = JSON.parse(message);
-        if (data.event == 'get') {
-            if (hosts[data.pos]) {
-                hosts[data.pos].forEach(host => {
-                    if (host != ws.id) {
-                        clients[host].send(JSON.stringify({
-                            event: 'get',
-                            pos: data.pos
-                        }));
-                        return true;
-                    }
-                });
-            } else {
-                hosts[data.pos] = [];
-            }
-            hosts[data.pos].push(ws.id);
-            positions[ws.id].push(data.pos);
-        } else if (data.event == 'put') {
-            hosts[data.pos].forEach(listener => {
-                if (listener != ws.id) {
-                    clients[listener].send(JSON.stringify({
-                        event: 'put',
-                        pos: data.pos,
-                        chunk: data.chunk
-                    }));
-                }
-            });
-        } else if (data.event == 'pop') {
-            positions[ws.id].splice(positions[ws.id].indexOf(data.pos), 1);
-            hosts[data.pos].splice(hosts[data.pos].indexOf(ws.id), 1);
-            if (hosts[data.pos].length == 0) {
-                delete hosts[data.pos]
-            }
-        }
-    })
-});
+ss.guid = () => {
+    return uuid.v1();
+}

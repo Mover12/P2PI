@@ -3,8 +3,17 @@ import './css/style.css'
 import Vector from './class/Vector.js'
 import Chunk from './class/Chunk.js'
 import Converter from './class/Converter.js'
+import Peer from './class/Peer.js'
 
-const socket = new WebSocket('wss://localhost:5000');
+const socket = await new Promise((resolve, reject) => {
+    const socket = new WebSocket('ws://localhost:8000')
+    socket.onopen = () => {
+        resolve(socket)
+    }
+})
+
+const peer = new Peer({ wss: socket });
+
 var cnv = document.querySelector(".canvas");
 var position = document.querySelector(".position");
 var cnv2d = cnv.getContext("2d");
@@ -30,25 +39,21 @@ const zoomSpeed = 1;
 const zoomMaximum = 10;
 
 
+
 function generateChunk(pos) {
     var chunk = chunks.get(pos.stringify());
     
     if (chunk == null) {
         chunk = new Chunk(cellCount);
-        socket.send(JSON.stringify({
-            event: 'get',
-            pos: pos.stringify()
-        }));
         chunksQueue.push(pos);
         chunks.set(pos.stringify(), chunk);
+        peer.room(pos.stringify());
+        peer.openroom(pos.stringify());
         if (chunksQueue.length > chunksCashSize) {
-            let pos = chunksQueue.shift().stringify();
-            socket.send(JSON.stringify({
-                event: 'pop',
-                pos: pos
-            }));
-            chunks.delete(pos);
-      }
+            var pos = chunksQueue.shift();
+            chunks.delete(pos.stringify());
+            peer.closeroom(pos.stringify());
+        }
     }
 }
 
@@ -102,11 +107,13 @@ function mouseMove(event) {
             if (event.buttons == 1) {
                 chunk.cells[cellPos.y][cellPos.x] = 1;
             }
-            socket.send(JSON.stringify({
-                event: 'put',
-                pos: chunkPos.stringify(),
-                chunk: chunk
-            }));
+            peer.broadcast(chunkPos.stringify(), JSON.stringify({
+                event: 'set',
+                data: {
+                    pos: chunkPos.stringify(),
+                    chunk: chunk
+                }
+            }))
         }
     }
 }
@@ -126,19 +133,6 @@ function wheel(event) {
     camera = camera.add(cameraBeforeZoom.sub(cameraAfterZoom));
 }
 
-socket.onmessage = message => {
-    var data = JSON.parse(message.data);
-    if (data.event == 'get') {
-        socket.send(JSON.stringify({
-            event: 'put',
-            pos: data.pos,
-            chunk: chunks.get(data.pos)
-        }));
-    } else if (data.event == 'put') {
-        chunks.set(data.pos, data.chunk);
-    }
-};
-
 setInterval(() => {
     position.innerHTML = `${Math.floor(camera.x)}, ${Math.floor(camera.y)}`;
     cnv2d.fillStyle = "white";
@@ -147,6 +141,21 @@ setInterval(() => {
     renderChunks(chunksQueue);
 }, 1);
 
+peer.onrtcopen = (data) => {
+    peer.send(data.uid, JSON.stringify({
+        event: 'set',
+        data: {
+            pos: data.rid,
+            chunk: chunks.get(data.rid)
+        }
+    }))
+}
+
+peer.onrtcmessage = (message) => {
+    if (message.event == 'set') {
+        chunks.set(message.data.pos, message.data.chunk)
+    }
+}
 
 cnv.addEventListener('mousedown', mousePress);
 cnv.addEventListener('mouseup', mouseRelease);
