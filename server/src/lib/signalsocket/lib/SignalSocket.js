@@ -1,49 +1,47 @@
-const WebSocket = require('ws');
+const EventEmitter = require('events');
 
-module.exports = class SignalSocket {
-    wss;
+class SignalSocket extends EventEmitter {
+    events = ['connection', 'room', 'open', 'close', 'sdp'];
 
-    clients;
-    rooms;
-    peers;
-
-    onconnection = (uid) => {};
-
-    onroom = (uid, data) => {};
-    onopen = (uid, data) => {};
-    onclose = (uid, rid) => {};
-    onsdp = (uid, data) => {};
-    onmessage = (uid, data) => {};
-
-    guid = () => {};
-    grid = (data) => {};
+    guid() {};
+    grid() {};
 
     constructor (options) {
-        this.wss = options.ws;
+        super();
+
+        this.wss = options.wss;
 
         this.clients = {};
         this.rooms = {};
         this.peers = {};
+
+        for (const i in this.events) {
+            Object.defineProperty(this, `on${this.events[i]}`, {
+                set(handler) {
+                    this.on(this.events[i], handler)
+                }
+            });
+        }
 
         this.wss.on('connection', ws => {
             ws.uid = this.guid();
             this.clients[ws.uid] = ws;
             this.peers[ws.uid] = {};
 
-            this.onconnection(ws.uid);
+            this.emit('connection', ws.uid);
 
             ws.on('message', data => {
                 const message = JSON.parse(data);
                 if (message.event == 'room') {
-                    const rid = this.grid(message.data.seed) || message.data.rid;
+                    const rid = message.data.rid || this.grid(message.data.seed);
                     if (!(rid in this.rooms)) {
-                        this.rooms[rid] = {}
-                        message.data.rid = rid
+                        this.rooms[rid] = {};
+                        message.data.rid = rid;
                     }
 
-                    this.onroom(ws.uid, message.data);
+                    this.emit('room', ws.uid, message.data);
                 } else if (message.event == 'open') {
-                    ws.send(JSON.stringify({
+                    this.send(ws.uid, JSON.stringify({
                         event: 'open',
                         data: {
                             uid: ws.uid,
@@ -51,25 +49,24 @@ module.exports = class SignalSocket {
                             peers: this.rooms[message.data.rid]
                         }
                     }));
+
                     this.rooms[message.data.rid][ws.uid] = null;
                     this.peers[ws.uid][message.data.rid] = null;
 
-                    this.onopen(ws.uid, message.data);
+                    this.emit('open', ws.uid, message.data);
                 } else if (message.event == 'close') {
                     this.close(ws.uid, message.data.rid);
                 } else if (message.event == 'sdp') {
-                    this.clients[message.data.uid].send(JSON.stringify({
+                    this.send(message.data.uid, JSON.stringify({
                         event: message.data.sdp.type,
                         data: {
                             uid: ws.uid,
                             rid: message.data.rid,
                             sdp: message.data.sdp
                         }
-                    }))
+                    }));
 
-                    this.onsdp(ws.uid, message.data);
-                } else {
-                    this.onmessage(ws.uid, message.data);
+                    this.emit('sdp', ws.uid, message.data);
                 }
             });
 
@@ -77,11 +74,15 @@ module.exports = class SignalSocket {
                 for(const rid in this.peers[ws.uid]) {
                     this.close(ws.uid, rid);
                 }
-
+                
                 delete this.peers[ws.uid];
                 delete this.clients[ws.uid];
             });
         });
+    }
+
+    on(event, handler) {
+        this.addListener(event, handler);
     }
 
     close(uid, rid) {
@@ -94,20 +95,23 @@ module.exports = class SignalSocket {
                     uid: uid,
                     rid: rid
                 }
-            }))
+            }));
         }
 
-        this.onclose(uid, rid);
+        this.emit('close', uid, rid);
     }
 
     send(uid, message) {
-        this.clients[uid].send(message)
+        if(this.clients[uid]) {
+            this.clients[uid].send(message);
+        }
     }
 
     broadcast(uids, data) {
         for(const i in uids) {
-            this.send(uids[i], data)
+            this.send(uids[i], data);
         }
-
     }
 }
+
+module.exports = SignalSocket;

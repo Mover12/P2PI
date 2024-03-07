@@ -1,32 +1,28 @@
-export default class Peer {
-    wss;
-
-    rooms;
-    peers;
-    peerConnections;
-    dataChannels;
-
-    onroom = (data) => {};
-    onopen = (data) => {};
-    onclose = (uid, rid) => {};
-    onsdp = (data) => {};
-    onmessage = (message) => {};
-
-
-    onrtcopen = (data) => {};
-    onrtclose = (uid, rid) => {};
-    onrtcmessage = (message) => {};
+class Peer extends EventTarget {
+    events = ['room', 'open', 'close', 'sdp', 'rtcopen', 'rtcclose', 'rtcmessage'];
 
     constructor(options) {
+        super();
+
         this.wss = options.wss;
+
         this.rooms = {};
         this.peers = {};
         this.peerConnections = {};
         this.dataChannels = {};
+
+        for (const i in this.events) {
+            Object.defineProperty(this, `on${this.events[i]}`, {
+                set(handler) {
+                    this.on(this.events[i], handler);
+                }
+            });
+        }
+
         this.wss.onmessage = async event => {
-            const message = JSON.parse(event.data)
+            const message = JSON.parse(event.data);
             if (message.event == 'room') {
-                this.onroom(message.data);
+                this.emit('room', message.data);
             } else if (message.event == 'open') {
                 if (message.data.peers) {
                     for (const uid in message.data.peers) {
@@ -41,7 +37,7 @@ export default class Peer {
                                 const dataChannel = await this.peerConnections[uid].createDataChannel("messageInput");
                                 this.setupdatachannel(dataChannel);
                                 dataChannel.onopen = () => {
-                                    resolve(dataChannel)
+                                    resolve(dataChannel);
                                 }
                             })
                 
@@ -57,7 +53,7 @@ export default class Peer {
                                             rid: message.data.rid,
                                             sdp: this.peerConnections[uid].localDescription
                                         }
-                                    }))
+                                    }));
                                 }
                             }
                         } else {
@@ -72,7 +68,7 @@ export default class Peer {
                     };
                 }
 
-                this.onopen(message.data);
+                this.emit('open', message.data);
             } else if (message.event == 'close') {
                 this.close(message.data.uid, message.data.rid);
             } else if (message.event == 'offer') {
@@ -85,15 +81,15 @@ export default class Peer {
                 this.dataChannels[message.data.uid] = new Promise(async (resolve, reject) => {
                     this.peerConnections[message.data.uid].ondatachannel = event => {
                         this.setupdatachannel(event.channel);
-                        resolve(event.channel)
-    
-                        this.onrtcopen(message.data);
+                        resolve(event.channel);
+                        
+                        this.emit('rtcopen', message.data);
                     }
                 })
                 
                 await this.peerConnections[message.data.uid].setRemoteDescription(message.data.sdp);
-                const answer = await this.peerConnections[message.data.uid].createAnswer()
-                await this.peerConnections[message.data.uid].setLocalDescription(answer)
+                const answer = await this.peerConnections[message.data.uid].createAnswer();
+                await this.peerConnections[message.data.uid].setLocalDescription(answer);
 
                 this.peerConnections[message.data.uid].onicecandidate = event => {
                     if (event.candidate) {
@@ -108,51 +104,61 @@ export default class Peer {
                     }
                 }
 
-                this.onsdp(message.data);
+                this.emit('sdp', message.data);
             } else if (message.event == 'answer') {
                 await this.peerConnections[message.data.uid].setRemoteDescription(message.data.sdp);
 
-                this.onsdp(message.data);
-            } else {
-                this.onmessage(message);
+                this.emit('sdp', message.data);
             }
         };
     }
 
     setupdatachannel(dataChannel) {
         dataChannel.onmessage = event => {
-            const message = JSON.parse(event.data)
+            const message = JSON.parse(event.data);
             if (message.event == 'open') {
                 this.rooms[message.data.rid][message.data.uid] = null;
                 this.peers[message.data.uid] = this.peers[message.data.uid] || {};
                 this.peers[message.data.uid][message.data.room] = null;
 
-                this.onrtcopen(message.data);
+                this.emit('rtcopen', message.data);
             } else {
-                this.onrtcmessage(message);
+                this.emit('rtcmessage', message);
             }
         };
     }
 
-    room(rid, seed) {
+    on(event, handler) {
+        this.addEventListener(event, handler);
+    }
+
+    emit(event, args) {
+        this.dispatchEvent(new CustomEvent(event, {
+            detail: args
+        }));
+    }
+
+    addroom(rid, seed) {
         this.wss.send(JSON.stringify({
             event: 'room',
             data: {
                 rid: rid,
                 seed: seed
             }
-        }))
+        }));
     }
 
     openroom(rid) {
-        this.rooms[rid] = {};
+        if (!this.rooms[rid]) {
+            this.rooms[rid] = {};
 
-        this.wss.send(JSON.stringify({
-            event: 'open',
-            data: {
-                rid: rid
-            }
-        }));
+            this.wss.send(JSON.stringify({
+                event: 'open',
+                data: {
+                    rid: rid
+                }
+            }));
+        }
     }
 
     closeroom(rid) {
@@ -180,14 +186,19 @@ export default class Peer {
             delete this.peerConnections[uid];
             delete this.peers[uid];
 
-            this.onrtclose(uid, rid);
+            this.emit('rtcclose', {
+                uid: uid,
+                rid: rid
+            });
         }
 
-        this.onclose(uid, rid);
+        this.emit('close', {
+            uid: uid,
+            rid: rid
+        });
     }
 
     async send(uid, message) {
-
         (await this.dataChannels[uid]).send(message);
     }
 
@@ -197,3 +208,5 @@ export default class Peer {
         }
     }
 }
+
+export default Peer;

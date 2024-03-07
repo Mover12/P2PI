@@ -5,16 +5,16 @@ module.exports = (env) => {
     return {
         mode: 'production',
         entry: {
-            client: path.resolve(__dirname, 'client', 'src', 'index.js')
+            client: path.resolve(__dirname, 'src', 'index.js')
         },
         output: {
             path: path.resolve(__dirname, 'build'),
-            filename: '[name].[contenthash].js',
+            filename: 'client.[contenthash].js',
             clean: true
         },
         plugins:[
             new HtmlWebpackPlugin({
-                template: path.resolve(__dirname, 'client', 'public', 'index.html'),
+                template: path.resolve(__dirname, 'public', 'index.html'),
             })
         ],
         module: {

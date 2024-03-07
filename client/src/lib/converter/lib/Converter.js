@@ -1,4 +1,4 @@
-import Vector from './Vector.js'
+import Vector from './Vector'
 export default class Converter {
     static CaToMo(pos, offset, scale) {
         return pos.sub(offset).mult(scale);

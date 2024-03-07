@@ -1,26 +1,20 @@
-import './css/style.css'
+import '../css/style.css'
 
-import Vector from './class/Vector.js'
-import Chunk from './class/Chunk.js'
-import Converter from './class/Converter.js'
-import Peer from './class/Peer.js'
-
-const socket = await new Promise((resolve, reject) => {
-    const socket = new WebSocket('ws://localhost:8000')
-    socket.onopen = () => {
-        resolve(socket)
-    }
-})
-
-const peer = new Peer({ wss: socket });
+import Vector from './lib/vector'
+import Chunk from './lib/chunk'
+import Converter from './lib/converter'
+import Peer from './lib/peer'
 
 var cnv = document.querySelector(".canvas");
-var position = document.querySelector(".position");
 var cnv2d = cnv.getContext("2d");
+var position = document.querySelector(".position");
+var colors = document.querySelector(".colors");
 
 var chunks = new Map();
 var chunksQueue = new Array();
-var colors = ['#FFFFFF', '#FF4040'];
+
+var currentColor = 1;
+var colorsList = ['#ffffff', '#c2c2c2', '#858585','#474747','#000000','#11ccff','#70aaea','#3f89e0','#074cf2','#5e30eb','#ff6c5c','#ff2500','#e53b7a','#992450','#381a94','#ffcf49','#ffb43f','#fe8649','#ff5b36','#da5100','#94df44','#5cbf0d','#c3d217','#fcc601','#d38202'];
 
 var camera = new Vector(0, 0);
 var prevCamera = new Vector(0, 0);
@@ -38,7 +32,33 @@ const chunksCashSize = 16;
 const zoomSpeed = 1;
 const zoomMaximum = 10;
 
+const URL = '127.0.0.1'
+const PORT = 8000;
 
+const socket = await new Promise((resolve, reject) => {
+    const socket = new WebSocket(`ws://${URL}:${PORT}`)
+    socket.onopen = () => {
+        resolve(socket)
+    }
+})
+
+const peer = new Peer({
+    wss: socket
+});
+
+position.innerHTML = `x:${Math.floor(camera.x)}, y:${Math.floor(camera.y)} s:${scale.x}`;
+
+for (const i in colorsList) {
+    const colorDiv = document.createElement(`div`);
+    colorDiv.className = 'color';
+    colorDiv.style.backgroundColor = colorsList[i];
+
+    colorDiv.addEventListener('click', () => {
+        currentColor = i;
+    })
+
+    colors.appendChild(colorDiv);
+}
 
 function generateChunk(pos) {
     var chunk = chunks.get(pos.stringify());
@@ -47,7 +67,7 @@ function generateChunk(pos) {
         chunk = new Chunk(cellCount);
         chunksQueue.push(pos);
         chunks.set(pos.stringify(), chunk);
-        peer.room(pos.stringify());
+        peer.addroom(pos.stringify());
         peer.openroom(pos.stringify());
         if (chunksQueue.length > chunksCashSize) {
             var pos = chunksQueue.shift();
@@ -75,7 +95,7 @@ function renderChunks(chunksQueue) {
                     i * cellPSize + chunkPos.y * chunkPSize
                 ), camera, scale);
                 if ((-cellPSize * scale.x <= cellPos.x && cellPos.x <= width) && (-cellPSize * scale.y <= cellPos.y && cellPos.y <= height)) {
-                    cnv2d.fillStyle = colors[cellColor];
+                    cnv2d.fillStyle = colorsList[cellColor];
                     cnv2d.fillRect(Math.trunc(cellPos.x), Math.trunc(cellPos.y), Math.trunc(cellPSize * scale.x), Math.trunc(cellPSize * scale.y));
                 }
             }
@@ -99,13 +119,14 @@ function mouseMove(event) {
         camera.x = camera.x - (event.offsetX - prevCamera.x) / scale.x;
         camera.y = camera.y - (event.offsetY - prevCamera.y) / scale.y;
         prevCamera.set(event.offsetX, event.offsetY);
+        position.innerHTML = `x:${Math.floor(camera.x)}, y:${Math.floor(camera.y)} s:${scale.x}`;
     } else {
         const chunkPos = Converter.CaToCh(Converter.MoToCa(new Vector(event.offsetX, event.offsetY), camera, scale), chunkPSize);
         const cellPos = Converter.CaToCe(Converter.MoToCa(new Vector(event.offsetX, event.offsetY), camera, scale), chunkPSize, cellPSize);
         const chunk = chunks.get(chunkPos.stringify());
         if (chunk != null) {
             if (event.buttons == 1) {
-                chunk.cells[cellPos.y][cellPos.x] = 1;
+                chunk.cells[cellPos.y][cellPos.x] = currentColor;
             }
             peer.broadcast(chunkPos.stringify(), JSON.stringify({
                 event: 'set',
@@ -131,17 +152,22 @@ function wheel(event) {
     }
     var cameraAfterZoom = Converter.MoToCa(new Vector(event.offsetX, event.offsetY), camera, scale);
     camera = camera.add(cameraBeforeZoom.sub(cameraAfterZoom));
+    position.innerHTML = `x:${Math.floor(camera.x)}, y:${Math.floor(camera.y)} s:${scale.x}`;
 }
 
 setInterval(() => {
-    position.innerHTML = `${Math.floor(camera.x)}, ${Math.floor(camera.y)}`;
     cnv2d.fillStyle = "white";
     cnv2d.fillRect(0, 0, width, height);
     generateNearChunks(Converter.CaToCh(new Vector(camera.x, camera.y), chunkPSize));
     renderChunks(chunksQueue);
 }, 1);
 
-peer.onrtcopen = (data) => {
+cnv.addEventListener('mousedown', mousePress);
+cnv.addEventListener('mouseup', mouseRelease);
+cnv.addEventListener('wheel', wheel);
+
+peer.onrtcopen = (event) => {
+    const data = event.detail;
     peer.send(data.uid, JSON.stringify({
         event: 'set',
         data: {
@@ -151,12 +177,9 @@ peer.onrtcopen = (data) => {
     }))
 }
 
-peer.onrtcmessage = (message) => {
+peer.onrtcmessage = (event) => {
+    const message = event.detail;
     if (message.event == 'set') {
         chunks.set(message.data.pos, message.data.chunk)
     }
 }
-
-cnv.addEventListener('mousedown', mousePress);
-cnv.addEventListener('mouseup', mouseRelease);
-cnv.addEventListener('wheel', wheel);

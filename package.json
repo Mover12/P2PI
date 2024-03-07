@@ -3,12 +3,12 @@
   "name": "p2pi",
   "version": "1.0.0",
   "description": "",
-  "main": "./src/index.js",
   "scripts": {
-    "server:dev": "nodemon server/index.js",
-    "client:dev": "webpack serve --open --env port=8080",
-    "client:build": "webpack",
-    "deploy": "gh-pages -d build"
+    "server:dev": "nodemon server/src/index.js",
+    "server:build": "webpack -c ./server/webpack.config.js",
+    "client:dev": "webpack serve -c ./client/webpack.config.js --open --env port=8080",
+    "client:build": "webpack -c ./client/webpack.config.js",
+    "deploy": "gh-pages -d ./client/build"
   },
   "keywords": [],
   "author": "",
