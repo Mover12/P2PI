@@ -1,10 +1,10 @@
-const SignalSocket = require('./lib/signalsocket');
+const SignalSocket = require('./src/signalsocket');
 const WebSocket = require('ws');
 
 const uuid = require('uuid');
 
 const URL = '127.0.0.1';
-const PORT = 8000;
+const PORT = 5000;
 
 const socket = new WebSocket.WebSocketServer({
     url: URL,

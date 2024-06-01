@@ -1,3 +1,4 @@
-/node_modules
-/server/build
-/client/build
+**/node_modules
+**/server/build
+**/client/build
+**/package-lock.json

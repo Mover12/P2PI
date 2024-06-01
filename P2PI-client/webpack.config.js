@@ -5,7 +5,7 @@ module.exports = (env) => {
     return {
         mode: 'production',
         entry: {
-            client: path.resolve(__dirname, 'src', 'index.js')
+            client: path.resolve(__dirname, 'index.js')
         },
         output: {
             path: path.resolve(__dirname, 'build'),

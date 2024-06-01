@@ -1,9 +1,9 @@
-import '../css/style.css'
+import './public/style/index.css'
 
-import Vector from './lib/vector'
-import Chunk from './lib/chunk'
-import Converter from './lib/converter'
-import Peer from './lib/peer'
+import Vector from './src/vector'
+import Chunk from './src/chunk'
+import Converter from './src/converter'
+import Peer from './src/peer'
 
 var cnv = document.querySelector(".canvas");
 var cnv2d = cnv.getContext("2d");
@@ -13,7 +13,7 @@ var colors = document.querySelector(".colors");
 var chunks = new Map();
 var chunksQueue = new Array();
 
-var currentColor = 1;
+var currentColor = 4;
 var colorsList = ['#ffffff', '#c2c2c2', '#858585','#474747','#000000','#11ccff','#70aaea','#3f89e0','#074cf2','#5e30eb','#ff6c5c','#ff2500','#e53b7a','#992450','#381a94','#ffcf49','#ffb43f','#fe8649','#ff5b36','#da5100','#94df44','#5cbf0d','#c3d217','#fcc601','#d38202'];
 
 var camera = new Vector(0, 0);
@@ -33,7 +33,7 @@ const zoomSpeed = 1;
 const zoomMaximum = 10;
 
 const URL = '127.0.0.1'
-const PORT = 8000;
+const PORT = 5000;
 
 const socket = await new Promise((resolve, reject) => {
     const socket = new WebSocket(`ws://${URL}:${PORT}`)
@@ -107,7 +107,8 @@ function mousePress(event) {
     if (event.buttons == 4) {
         prevCamera.set(event.offsetX, event.offsetY);
     }
-    cnv.addEventListener('mousemove', mouseMove)
+    mouseMove(event);
+    cnv.addEventListener('mousemove', mouseMove);
 }
 
 function mouseRelease() {
