@@ -1,20 +1,16 @@
-const SignalSocket = require('./src/signalsocket');
-const WebSocket = require('ws');
+const SocketServer = require('./src/SocketServer');
+const SignalingSocketServer = require('./src/SignalingSocketServer');
+const RoomSocketServer = require('./src/RoomSocketServer');
 
-const uuid = require('uuid');
-
-const URL = '127.0.0.1';
-const PORT = 5000;
-
-const socket = new WebSocket.WebSocketServer({
-    url: URL,
-    port: PORT
-})
-
-const ss = new SignalSocket({
-    wss: socket
+const ss = new SocketServer({
+    url: '127.0.0.1',
+    port: 8000
 });
 
-ss.guid = () => {
-    return uuid.v1();
-}
+const sss = new SignalingSocketServer({
+    socket: ss
+});
+
+const rs = new RoomSocketServer({
+    socket: ss
+});

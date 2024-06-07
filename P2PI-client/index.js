@@ -1,9 +1,14 @@
 import './public/style/index.css'
 
-import Vector from './src/vector'
-import Chunk from './src/chunk'
-import Converter from './src/converter'
-import Peer from './src/peer'
+import Vector from './src/Vector'
+import Chunk from './src/Chunk'
+import Converter from './src/Converter'
+import Peer from './src/Peer';
+import Socket from './src/Socket';
+import SocketPeer from './src/SocketPeer';
+import Room from './src/Room';
+import RoomPeer from './src/RoomPeer';
+
 
 var cnv = document.querySelector(".canvas");
 var cnv2d = cnv.getContext("2d");
@@ -35,16 +40,39 @@ const zoomMaximum = 10;
 const URL = '127.0.0.1'
 const PORT = 5000;
 
+
+
+const UID = Array.from(Array(8), () => Math.floor(Math.random() * 16).toString(16)).join('');
+
 const socket = await new Promise((resolve, reject) => {
-    const socket = new WebSocket(`ws://${URL}:${PORT}`)
-    socket.onopen = () => {
+    const socket = new Socket({
+        id: UID,
+        url: 'ws://127.0.0.1:8000'
+    });
+    socket.addEventListener('open', () => {
         resolve(socket)
-    }
+    });
 })
 
 const peer = new Peer({
-    wss: socket
+    id: UID
+})
+
+const socketPeer = new SocketPeer({
+    socket: socket,
+    peer: peer
 });
+
+const room = new Room({
+    socket: socket
+});
+
+const roomPeer = new RoomPeer({
+    room: room,
+    signalpeer: socketPeer
+})
+
+
 
 position.innerHTML = `x:${Math.floor(camera.x)}, y:${Math.floor(camera.y)} s:${scale.x}`;
 
@@ -67,12 +95,11 @@ function generateChunk(pos) {
         chunk = new Chunk(cellCount);
         chunksQueue.push(pos);
         chunks.set(pos.stringify(), chunk);
-        peer.addroom(pos.stringify());
-        peer.openroom(pos.stringify());
+        room.open(pos.stringify());
         if (chunksQueue.length > chunksCashSize) {
             var pos = chunksQueue.shift();
             chunks.delete(pos.stringify());
-            peer.closeroom(pos.stringify());
+            room.close(pos.stringify());
         }
     }
 }
@@ -129,13 +156,14 @@ function mouseMove(event) {
             if (event.buttons == 1) {
                 chunk.cells[cellPos.y][cellPos.x] = currentColor;
             }
-            peer.broadcast(chunkPos.stringify(), JSON.stringify({
+
+            roomPeer.broadcast(chunkPos.stringify(), {
                 event: 'set',
-                data: {
+                body: {
                     pos: chunkPos.stringify(),
                     chunk: chunk
                 }
-            }))
+            })
         }
     }
 }
@@ -167,20 +195,10 @@ cnv.addEventListener('mousedown', mousePress);
 cnv.addEventListener('mouseup', mouseRelease);
 cnv.addEventListener('wheel', wheel);
 
-peer.onrtcopen = (event) => {
-    const data = event.detail;
-    peer.send(data.uid, JSON.stringify({
-        event: 'set',
-        data: {
-            pos: data.rid,
-            chunk: chunks.get(data.rid)
-        }
-    }))
-}
-
-peer.onrtcmessage = (event) => {
-    const message = event.detail;
+peer.addEventListener('message', e => {
+    const [id, event] = e.detail;
+    const message = JSON.parse(event.data);
     if (message.event == 'set') {
-        chunks.set(message.data.pos, message.data.chunk)
+        chunks.set(message.body.pos, message.body.chunk)
     }
-}
+})
